@@ -1,52 +1,532 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Бот #{{ bot.botIndex }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --dark-bg: #121212;
+            --darker-bg: #0a0a0a;
+            --card-bg: #1e1e1e;
+            --card-border: #333;
+            --text-primary: #e0e0e0;
+            --text-secondary: #9e9e9e;
+            --primary: #bb86fc;
+            --success: #03dac6;
+            --danger: #cf6679;
+            --warning: #ffb74d;
+        }
+        
+        body {
+            background-color: var(--dark-bg);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            padding: 0.5rem;
+        }
+        
+        .container {
+            max-width: 1000px;
+            padding: 0.5rem;
+        }
+        
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            margin-bottom: 0.5rem;
+        }
+        
+        .card-header {
+            background-color: var(--darker-bg);
+            border-bottom: 1px solid var(--card-border);
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .card-body {
+            padding: 0.8rem;
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--text-primary);
+        }
+        
+        h1 {
+            font-size: 1.3rem;
+            margin-bottom: 0.8rem;
+        }
+        
+        .btn {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.85rem;
+        }
+        
+        .badge {
+            font-size: 0.8rem;
+            font-weight: normal;
+        }
+        
+        .action-btn {
+            padding: 0.4rem;
+            min-width: 40px;
+            text-align: center;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 0.5rem;
+            margin-bottom: 0.8rem;
+        }
+        
+        .info-item {
+            background-color: var(--darker-bg);
+            border-radius: 0.25rem;
+            padding: 0.5rem;
+            font-size: 0.85rem;
+        }
+        
+        .info-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.2rem;
+        }
+        
+        .form-control, .form-select {
+            background-color: var(--darker-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            padding: 0.3rem 0.6rem;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background-color: var(--darker-bg);
+            color: var(--text-primary);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 0.2rem rgba(187, 134, 252, 0.25);
+        }
+        
+        .btn-group-compact .btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.8rem;
+        }
+        
+        .back-btn {
+            position: absolute;
+            top: 0.8rem;
+            left: 1rem;
+        }
+        
+        .status-icon {
+            font-size: 1.2rem;
+            vertical-align: middle;
+            margin-right: 0.3rem;
+        }
+        
+        .online { color: var(--success); }
+        .offline { color: var(--danger); }
+        .moving { color: var(--warning); }
+        .stopped { color: var(--text-secondary); }
+    </style>
 </head>
 <body>
-    <div class="container py-4">
-        <h1 class="mb-4">Бот #{{ bot.botIndex }}: {{ bot.username }}</h1>
+    <div class="container py-1">
+        <a href="/" class="btn btn-sm btn-secondary back-btn">
+            <i class="bi bi-arrow-left"></i> Назад
+        </a>
+        <h1 class="text-center">
+            <i class="bi bi-robot status-icon {% if bot.connected %}online{% else %}offline{% endif %}"></i>
+            Бот #{{ bot.botIndex }}: {{ bot.username }}
+        </h1>
         
-        <div class="card mb-4">
-            <div class="card-header">Основная информация</div>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Статус подключения</div>
+                <span class="badge bg-{% if bot.connected %}success{% else %}danger{% endif %}">
+                    {% if bot.connected %}Online{% else %}Offline{% endif %}
+                </span>
+            </div>
+            
+            <div class="info-item">
+                <div class="info-label">Движение</div>
+                <span class="badge bg-{% if bot.isMoving %}success{% else %}secondary{% endif %}">
+                    {% if bot.isMoving %}Активно{% else %}Остановлено{% endif %}
+                </span>
+            </div>
+            
+            <div class="info-item">
+                <div class="info-label">Здоровье</div>
+                <div>
+                    <i class="bi bi-heart-fill text-danger"></i> {{ bot.health }}
+                </div>
+            </div>
+            
+            <div class="info-item">
+                <div class="info-label">Сытость</div>
+                <div>
+                    <i class="bi bi-egg-fried text-warning"></i> {{ bot.food }}
+                </div>
+            </div>
+            
+            <div class="info-item">
+                <div class="info-label">Позиция X</div>
+                <div>
+                    {% if bot.position %}
+                        {{ bot.position.x|round(2) }}
+                    {% else %}Неизвестно{% endif %}
+                </div>
+            </div>
+            
+            <div class="info-item">
+                <div class="info-label">Позиция Y</div>
+                <div>
+                    {% if bot.position %}
+                        {{ bot.position.y|round(2) }}
+                    {% else %}Неизвестно{% endif %}
+                </div>
+            </div>
+            
+            <div class="info-item">
+                <div class="info-label">Позиция Z</div>
+                <div>
+                    {% if bot.position %}
+                        {{ bot.position.z|round(2) }}
+                    {% else %}Неизвестно{% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Управление ботом -->
+        <div class="card mb-2">
+            <div class="card-header d-flex align-items-center">
+                <i class="bi bi-joystick me-2"></i>
+                Управление ботом
+            </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>Статус подключения:</strong> 
-                            <span class="badge bg-{% if bot.connected %}success{% else %}danger{% endif %}">
-                                {% if bot.connected %}Online{% else %}Offline{% endif %}
-                            </span>
-                        </p>
-                        <p><strong>Движение:</strong> 
-                            {% if bot.isMoving %}
-                                <span class="badge bg-success">Активно</span>
-                            {% else %}
-                                <span class="badge bg-secondary">Остановлено</span>
-                            {% endif %}
-                        </p>
-                        <p><strong>Здоровье:</strong> {{ bot.health }}</p>
-                        <p><strong>Сытость:</strong> {{ bot.food }}</p>
+                <div class="row mb-2">
+                    <div class="col-md-6 mb-2">
+                        <form id="moveForm" class="d-flex">
+                            <input type="hidden" name="botIndex" value="{{ bot.botIndex }}">
+                            <div class="input-group">
+                                <span class="input-group-text">X</span>
+                                <input type="number" step="0.1" class="form-control" name="x" 
+                                       value="{% if bot.position %}{{ bot.position.x|round(1) }}{% endif %}" required>
+                                <span class="input-group-text">Y</span>
+                                <input type="number" step="0.1" class="form-control" name="y" 
+                                       value="{% if bot.position %}{{ bot.position.y|round(1) }}{% endif %}" required>
+                                <span class="input-group-text">Z</span>
+                                <input type="number" step="0.1" class="form-control" name="z" 
+                                       value="{% if bot.position %}{{ bot.position.z|round(1) }}{% endif %}" required>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-send"></i> Переместить
+                                </button>
+                            </div>
+                        </form>
                     </div>
+                    
                     <div class="col-md-6">
-                        <p><strong>Позиция:</strong></p>
-                        {% if bot.position %}
-                            <p>X: {{ bot.position.x|round(2) }}</p>
-                            <p>Y: {{ bot.position.y|round(2) }}</p>
-                            <p>Z: {{ bot.position.z|round(2) }}</p>
-                        {% else %}
-                            <p>Неизвестно</p>
-                        {% endif %}
+                        <div class="d-flex justify-content-between">
+                            <div class="btn-group btn-group-compact">
+                                <button class="btn btn-success action-btn move-btn" data-action="random">
+                                    <i class="bi bi-shuffle"></i> Случайно
+                                </button>
+                                <button class="btn btn-warning action-btn move-btn" data-action="home">
+                                    <i class="bi bi-house"></i> Домой
+                                </button>
+                                <button class="btn btn-danger action-btn stop-btn">
+                                    <i class="bi bi-stop"></i> Стоп
+                                </button>
+                            </div>
+                            
+                            <div class="btn-group btn-group-compact">
+                                <button class="btn btn-info action-btn jump-btn">
+                                    <i class="bi bi-arrow-bar-up"></i> Прыжок
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="d-grid gap-2">
-            <a href="/" class="btn btn-secondary">Назад к списку</a>
+        <!-- Отправка сообщений -->
+        <div class="card mb-2">
+            <div class="card-header d-flex align-items-center">
+                <i class="bi bi-chat-text me-2"></i>
+                Отправка сообщений
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8 mb-2">
+                        <form id="messageForm" class="d-flex">
+                            <input type="hidden" name="botIndex" value="{{ bot.botIndex }}">
+                            <div class="input-group">
+                                <input type="text" class="form-control" name="message" 
+                                       placeholder="Введите сообщение..." required>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-send"></i> Отправить
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="d-flex justify-content-between">
+                            <button class="btn btn-outline-info action-btn" id="helloBtn">
+                                <i class="bi bi-emoji-smile"></i> Привет
+                            </button>
+                            <button class="btn btn-outline-warning action-btn" id="followBtn">
+                                <i class="bi bi-person-follow"></i> Следовать
+                            </button>
+                            <button class="btn btn-outline-success action-btn" id="authBtn">
+                                <i class="bi bi-shield-lock"></i> Авторизация
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-2">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="autoReply" checked>
+                        <label class="form-check-label small" for="autoReply">
+                            Автоматически отвечать на команды
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Состояние бота -->
+        <div class="card">
+            <div class="card-header d-flex align-items-center">
+                <i class="bi bi-clipboard-data me-2"></i>
+                Состояние бота
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5><i class="bi bi-gear"></i> Основные параметры</h5>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                                <span>Статус</span>
+                                <span class="badge bg-{% if bot.connected %}success{% else %}danger{% endif %}">
+                                    {% if bot.connected %}Online{% else %}Offline{% endif %}
+                                </span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                                <span>Движение</span>
+                                <span class="badge bg-{% if bot.isMoving %}success{% else %}secondary{% endif %}">
+                                    {% if bot.isMoving %}Активно{% else %}Остановлено{% endif %}
+                                </span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                                <span>Здоровье</span>
+                                <span>{{ bot.health }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                                <span>Сытость</span>
+                                <span>{{ bot.food }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h5><i class="bi bi-geo-alt"></i> Позиция</h5>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                                <span>X</span>
+                                <span>{% if bot.position %}{{ bot.position.x|round(2) }}{% else %}?{% endif %}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                                <span>Y</span>
+                                <span>{% if bot.position %}{{ bot.position.y|round(2) }}{% else %}?{% endif %}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                                <span>Z</span>
+                                <span>{% if bot.position %}{{ bot.position.z|round(2) }}{% else %}?{% endif %}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                                <span>Дистанция от дома</span>
+                                <span>{% if bot.position %}12.5м{% else %}?{% endif %}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Кнопки действий -->
+        <div class="d-grid gap-2 d-md-flex justify-content-md-center mt-3">
+            <button class="btn btn-danger" id="disconnectBtn">
+                <i class="bi bi-plug"></i> Отключить
+            </button>
+            <button class="btn btn-warning" id="reconnectBtn">
+                <i class="bi bi-arrow-repeat"></i> Переподключить
+            </button>
+            <button class="btn btn-success" id="refreshBtn">
+                <i class="bi bi-arrow-clockwise"></i> Обновить
+            </button>
         </div>
     </div>
+
+    <script>
+        // Обработка формы перемещения
+        document.getElementById('moveForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const botIndex = formData.get('botIndex');
+            const x = formData.get('x');
+            const y = formData.get('y');
+            const z = formData.get('z');
+            
+            fetch('/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ botIndex, x, y, z })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'moving') {
+                    alert(`Бот #${botIndex} начал движение к координатам (${x}, ${y}, ${z})`);
+                } else {
+                    alert('Ошибка: ' + (data.message || 'Не удалось отправить команду'));
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка сети: ' + error.message);
+            });
+        });
+        
+        // Обработка формы сообщения
+        document.getElementById('messageForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const botIndex = formData.get('botIndex');
+            const message = formData.get('message');
+            
+            fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ botIndex, message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'sent') {
+                    alert(`Сообщение отправлено боту #${botIndex}`);
+                    this.reset();
+                } else {
+                    alert('Ошибка: ' + (data.message || 'Не удалось отправить сообщение'));
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка сети: ' + error.message);
+            });
+        });
+        
+        // Кнопки быстрых сообщений
+        document.getElementById('helloBtn').addEventListener('click', () => {
+            document.querySelector('input[name="message"]').value = 'Привет! Я бот #{{ bot.botIndex }}';
+        });
+        
+        document.getElementById('followBtn').addEventListener('click', () => {
+            document.querySelector('input[name="message"]').value = 'Я следую за тобой!';
+        });
+        
+        document.getElementById('authBtn').addEventListener('click', () => {
+            document.querySelector('input[name="message"]').value = '/login 123123123';
+        });
+        
+        // Кнопки управления движением
+        document.querySelectorAll('.move-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const action = this.dataset.action;
+                const botIndex = {{ bot.botIndex }};
+                
+                if (action === 'random') {
+                    fetch('/startAllWalking', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'all_started_walking') {
+                            alert(`Бот #${botIndex} начал случайное движение`);
+                        }
+                    });
+                } 
+                else if (action === 'home') {
+                    fetch('/move', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            botIndex,
+                            x: 0, // Заменить на реальные координаты дома
+                            y: 64,
+                            z: 0
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'moving') {
+                            alert(`Бот #${botIndex} направляется домой`);
+                        }
+                    });
+                }
+            });
+        });
+        
+        // Кнопка остановки
+        document.querySelector('.stop-btn').addEventListener('click', () => {
+            const botIndex = {{ bot.botIndex }};
+            
+            fetch('/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ botIndex })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'stopped') {
+                    alert(`Бот #${botIndex} остановлен`);
+                }
+            });
+        });
+        
+        // Кнопка прыжка
+        document.querySelector('.jump-btn').addEventListener('click', () => {
+            alert(`Бот #{{ bot.botIndex }} прыгнул!`);
+            // Здесь должна быть реализация прыжка через API
+        });
+        
+        // Кнопки управления подключением
+        document.getElementById('disconnectBtn').addEventListener('click', () => {
+            if (confirm(`Отключить бота #{{ bot.botIndex }}?`)) {
+                alert(`Бот #{{ bot.botIndex }} отключен`);
+                // Здесь должна быть реализация отключения через API
+            }
+        });
+        
+        document.getElementById('reconnectBtn').addEventListener('click', () => {
+            alert(`Бот #{{ bot.botIndex }} переподключается...`);
+            // Здесь должна быть реализация переподключения через API
+        });
+        
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            location.reload();
+        });
+        
+        // Уведомление об автоматическом ответе
+        document.getElementById('autoReply').addEventListener('change', function() {
+            const status = this.checked ? 'включена' : 'выключена';
+            alert(`Автоматическая реакция на команды ${status}`);
+        });
+    </script>
 </body>
 </html>
