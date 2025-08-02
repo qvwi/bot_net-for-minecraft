@@ -10,13 +10,13 @@ import signal
 # Получаем путь к текущей директории
 current_dir = os.path.dirname(os.path.abspath(__file__))
 bot_js_path = os.path.join(current_dir, "mineflayer_bot.js")
+dashboard_path = os.path.join(current_dir, "web_dashboard.py")
 
 # Запуск Node.js сервера с ботами
 print(f"Запуск сервера ботов: {bot_js_path}")
 node_process = None
 
 try:
-    # Запускаем с увеличенной памятью
     node_process = subprocess.Popen(
         ["node", "--max-old-space-size=4096", bot_js_path],
         stdout=sys.stdout,
@@ -29,22 +29,39 @@ except Exception as e:
     print("2. Файл mineflayer_bot.js в этой же папке")
     sys.exit(1)
 
-# Функция для завершения Node.js процесса при выходе
-def terminate_node():
-    if node_process and node_process.poll() is None:
-        print("Завершение Node.js...")
-        if sys.platform == "win32":
-            node_process.terminate()
-        else:
-            os.kill(node_process.pid, signal.SIGTERM)
-        try:
-            node_process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            print("Принудительное завершение...")
-            node_process.kill()
-atexit.register(terminate_node)
+# Запуск веб-интерфейса
+print("Запуск веб-интерфейса...")
+dashboard_process = None
+try:
+    dashboard_process = subprocess.Popen(
+        [sys.executable, dashboard_path],
+        stdout=sys.stdout,
+        stderr=sys.stderr
+    )
+except Exception as e:
+    print(f"Ошибка запуска веб-интерфейса: {str(e)}")
+    print("Убедитесь что установлен Flask: pip install flask")
 
-# Даем время серверу запуститься
+# Функции для завершения процессов
+def terminate_process(process):
+    if process and process.poll() is None:
+        if sys.platform == "win32":
+            process.terminate()
+        else:
+            os.kill(process.pid, signal.SIGTERM)
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+
+def cleanup():
+    print("Завершение процессов...")
+    if node_process: terminate_process(node_process)
+    if dashboard_process: terminate_process(dashboard_process)
+
+atexit.register(cleanup)
+
+# Даем время серверам запуститься
 print("Ожидание запуска API (10 секунд)...")
 time.sleep(10)
 
@@ -66,11 +83,9 @@ class MinecraftBotManager:
                 self.bot_count = count
                 print(result.get('message', ''))
                 
-                # Расчет времени ожидания (0.2 сек на бота + 5 сек базовых)
                 wait_time = max(5, count * 0.2)
                 print(f"Примерное время создания: {wait_time:.1f} секунд")
                 
-                # Ожидаем завершения для больших групп
                 if count > 50:
                     print("Ожидайте завершения...")
                     time.sleep(wait_time)
@@ -79,21 +94,6 @@ class MinecraftBotManager:
         except Exception as e:
             print(f"Ошибка: {str(e)}")
             return {"status": "error", "message": str(e)}
-    
-    def wait_connection(self, bot_index, timeout=60):
-        """Ожидает подключения конкретного бота"""
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            try:
-                status = self.get_bot_status(bot_index)
-                if status and status.get('connected'):
-                    print(f"Бот #{bot_index} подключен!")
-                    return True
-            except:
-                pass
-            print(f"Ожидание бота #{bot_index}...")
-            time.sleep(3)
-        return False
     
     def send_command(self, endpoint, data=None):
         """Отправляет команду API"""
@@ -178,7 +178,6 @@ if __name__ == "__main__":
         count = max(min(count, 1000), 1)
         result = manager.create_bots(count)
         
-        # Дополнительное ожидание для больших групп
         if count > 100:
             wait_time = max(10, count * 0.15)
             print(f"Дополнительное ожидание {wait_time:.1f} сек...")

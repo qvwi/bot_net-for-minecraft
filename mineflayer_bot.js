@@ -6,7 +6,7 @@ const app = express();
 app.use(express.json());
 
 // Конфигурация ботов
-const BOT_PASSWORD = '123123123'; // Общий пароль для всех ботов
+const BOT_PASSWORD = '123123123';
 const bots = [];
 let botCreationQueue = [];
 let isCreatingBots = false;
@@ -52,9 +52,19 @@ function cleanupBot(botData) {
         botData.bot.end();
         botData.bot = null;
     }
-    ['jumpInterval', 'walkInterval', 'reconnectTimeout', 'obstacleCheckInterval'].forEach(key => {
+    
+    const intervals = [
+        'jumpInterval', 
+        'walkInterval', 
+        'reconnectTimeout', 
+        'obstacleCheckInterval',
+        'movementTimeout'
+    ];
+    
+    intervals.forEach(key => {
         if (botData[key]) {
             clearInterval(botData[key]);
+            clearTimeout(botData[key]);
             botData[key] = null;
         }
     });
@@ -78,7 +88,7 @@ function createBot(username, botIndex) {
 
     const botInstance = mineflayer.createBot({
         host: '',
-        port: 25565, // 25565
+        port: 25565,
         username: username,
         version: '1.20.1',
         auth: 'offline',
@@ -101,7 +111,8 @@ function createBot(username, botIndex) {
         lastPosition: null,
         stuckTimer: 0,
         obstacleCheckInterval: null,
-        authCooldown: false // Защита от спама
+        movementTimeout: null,
+        authCooldown: false
     };
 
     bots[botIndex] = botData;
@@ -115,7 +126,6 @@ function createBot(username, botIndex) {
         console.log(`[${username}] Бот заспавнился!`);
         botData.homePosition = botInstance.entity.position.clone();
         
-        // Авторизация при спавне
         setTimeout(() => {
             try {
                 botInstance.chat(`/reg ${BOT_PASSWORD} ${BOT_PASSWORD}`);
@@ -129,7 +139,6 @@ function createBot(username, botIndex) {
         }
     });
 
-    // Обработчик сообщений с реакцией на команды
     botInstance.on('message', (msg) => {
         try {
             const message = typeof msg === 'string' 
@@ -138,7 +147,6 @@ function createBot(username, botIndex) {
             
             console.log(`[${username}] Сообщение: ${message}`);
             
-            // Реакция на команды аутентификации
             if (!botData.authCooldown) {
                 const lowerMsg = message.toLowerCase();
                 
@@ -192,13 +200,16 @@ function createBot(username, botIndex) {
         scheduleReconnect(botIndex);
     });
 
-    // Периодические прыжки
     if (totalBotsPlanned <= 100) {
         botData.jumpInterval = setInterval(() => {
-            if (botData.isConnected && !botData.isMoving) {
+            if (botData.bot && botData.isConnected && !botData.isMoving) {
                 try {
                     botInstance.setControlState('jump', true);
-                    setTimeout(() => botInstance.setControlState('jump', false), 500);
+                    setTimeout(() => {
+                        if (botData.bot) {
+                            botInstance.setControlState('jump', false);
+                        }
+                    }, 500);
                 } catch (e) {
                     console.log(`[${username}] Ошибка прыжка:`, e.message);
                 }
@@ -208,15 +219,15 @@ function createBot(username, botIndex) {
 }
 
 async function breakObstructingBlocks(botData) {
-    if (!botData.isConnected || botData.isBreakingBlock) return;
+    if (!botData.bot || !botData.isConnected || botData.isBreakingBlock) return;
     
     const bot = botData.bot;
     const directions = [
-        vec3(0, 0, 1),   // Вперед
-        vec3(0, 1, 0),   // Вверх
-        vec3(0, -1, 0),  // Вниз
-        vec3(1, 0, 0),   // Вправо
-        vec3(-1, 0, 0)   // Влево
+        vec3(0, 0, 1),
+        vec3(0, 1, 0),
+        vec3(0, -1, 0),
+        vec3(1, 0, 0),
+        vec3(-1, 0, 0)
     ];
 
     for (const dir of directions) {
@@ -240,7 +251,7 @@ async function breakObstructingBlocks(botData) {
 }
 
 function checkIfStuck(botData) {
-    if (!botData.lastPosition || !botData.isMoving) return false;
+    if (!botData.bot || !botData.lastPosition || !botData.isMoving) return false;
     
     const currentPos = botData.bot.entity.position;
     const distance = botData.lastPosition.distanceTo(currentPos);
@@ -262,17 +273,22 @@ function checkIfStuck(botData) {
 function startBotMovement(botData) {
     if (botData.walkInterval) clearInterval(botData.walkInterval);
     if (botData.obstacleCheckInterval) clearInterval(botData.obstacleCheckInterval);
+    if (botData.movementTimeout) clearTimeout(botData.movementTimeout);
     
     botData.obstacleCheckInterval = setInterval(async () => {
-        if (!botData.isConnected || !botData.isMoving) return;
+        if (!botData.bot || !botData.isConnected || !botData.isMoving) return;
         
         if (checkIfStuck(botData)) {
             await breakObstructingBlocks(botData);
-            botData.bot.setControlState('jump', true);
-            setTimeout(() => {
-                botData.bot.setControlState('jump', false);
-                botData.stuckTimer = 0;
-            }, 1000);
+            if (botData.bot) {
+                botData.bot.setControlState('jump', true);
+                setTimeout(() => {
+                    if (botData.bot) {
+                        botData.bot.setControlState('jump', false);
+                    }
+                    botData.stuckTimer = 0;
+                }, 1000);
+            }
         }
         
         if (Math.random() < 0.3) {
@@ -282,7 +298,7 @@ function startBotMovement(botData) {
     
     if (totalBotsPlanned <= 100) {
         botData.walkInterval = setInterval(() => {
-            if (!botData.isConnected || !botData.homePosition || botData.isMoving) return;
+            if (!botData.bot || !botData.isConnected || !botData.homePosition || botData.isMoving) return;
             
             try {
                 const radius = 5;
@@ -300,8 +316,8 @@ function startBotMovement(botData) {
                 botData.bot.lookAt(target);
                 botData.bot.setControlState('forward', true);
                 
-                setTimeout(() => {
-                    if (botData.isConnected) {
+                botData.movementTimeout = setTimeout(() => {
+                    if (botData.bot && botData.isConnected) {
                         botData.bot.setControlState('forward', false);
                         botData.isMoving = false;
                         botData.stuckTimer = 0;
@@ -320,6 +336,8 @@ function scheduleReconnect(botIndex) {
     const botData = bots[botIndex];
     if (!botData || botData.reconnectTimeout) return;
 
+    cleanupBot(botData);
+    
     const delay = bots.length > 100 ? 30000 : 10000;
     
     botData.reconnectTimeout = setTimeout(() => {
@@ -345,7 +363,7 @@ app.post('/createBots', (req, res) => {
 
 app.post('/chat', (req, res) => {
     const botIndex = parseInt(req.body.botIndex);
-    if (isNaN(botIndex) || !bots[botIndex] || !bots[botIndex].isConnected) {
+    if (isNaN(botIndex) || botIndex < 0 || botIndex >= bots.length || !bots[botIndex] || !bots[botIndex].isConnected) {
         return res.status(503).send({ status: 'error', message: 'Бот не подключен' });
     }
 
@@ -359,7 +377,7 @@ app.post('/chat', (req, res) => {
 
 app.post('/move', (req, res) => {
     const botIndex = parseInt(req.body.botIndex);
-    if (isNaN(botIndex) || !bots[botIndex] || !bots[botIndex].isConnected) {
+    if (isNaN(botIndex) || botIndex < 0 || botIndex >= bots.length || !bots[botIndex] || !bots[botIndex].isConnected) {
         return res.status(503).send({ status: 'error', message: 'Бот не подключен' });
     }
 
@@ -383,7 +401,7 @@ app.post('/move', (req, res) => {
 
 app.post('/stop', (req, res) => {
     const botIndex = parseInt(req.body.botIndex);
-    if (isNaN(botIndex) || !bots[botIndex] || !bots[botIndex].isConnected) {
+    if (isNaN(botIndex) || botIndex < 0 || botIndex >= bots.length || !bots[botIndex] || !bots[botIndex].isConnected) {
         return res.status(503).send({ status: 'error', message: 'Бот не подключен' });
     }
 
@@ -399,7 +417,7 @@ app.post('/stop', (req, res) => {
 
 app.post('/startAllWalking', (req, res) => {
     bots.forEach((botData, index) => {
-        if (botData.isConnected) {
+        if (botData.bot && botData.isConnected) {
             try {
                 if (botData.isMoving) {
                     botData.bot.setControlState('forward', false);
@@ -432,16 +450,33 @@ app.post('/startAllWalking', (req, res) => {
 });
 
 app.get('/status', (req, res) => {
-    const statuses = bots.map((botData, index) => ({
-        botIndex: index,
-        connected: botData.isConnected,
-        username: botData.username,
-        position: botData.bot.entity?.position,
-        health: botData.bot.health,
-        food: botData.bot.food,
-        isMoving: botData.isMoving || false
-    }));
+    const statuses = bots.map((botData, index) => {
+        if (!botData) return null;
+        
+        return {
+            botIndex: index,
+            connected: botData.isConnected,
+            username: botData.username,
+            position: botData.bot?.entity?.position,
+            health: botData.bot?.health,
+            food: botData.bot?.food,
+            isMoving: botData.isMoving || false
+        };
+    }).filter(Boolean);
+    
     res.send(statuses);
+});
+
+app.get('/performance', (req, res) => {
+    const mem = process.memoryUsage();
+    res.send({
+        cpu: process.cpuUsage().user / 1000,
+        ram: mem.rss / 1024 / 1024,
+        connectedBots: bots.filter(b => b.isConnected).length,
+        totalBots: bots.length,
+        isCreating: isCreatingBots,
+        queueLength: botCreationQueue.length
+    });
 });
 
 app.post('/broadcast', (req, res) => {
@@ -452,7 +487,7 @@ app.post('/broadcast', (req, res) => {
 
     let sentCount = 0;
     bots.forEach(botData => {
-        if (botData.isConnected) {
+        if (botData.bot && botData.isConnected) {
             try {
                 botData.bot.chat(message);
                 sentCount++;
@@ -471,15 +506,11 @@ app.post('/broadcast', (req, res) => {
 });
 
 // Мониторинг производительности
-let lastCpuUsage = process.cpuUsage();
 setInterval(() => {
-    const usage = process.cpuUsage(lastCpuUsage);
-    lastCpuUsage = process.cpuUsage();
     const mem = process.memoryUsage();
-    
     const connectedBots = bots.filter(b => b.isConnected).length;
     
-    console.log(`[PERF] CPU: ${(usage.user / 1000).toFixed(1)}ms | ` +
+    console.log(`[PERF] CPU: ${(process.cpuUsage().user / 1000).toFixed(1)}ms | ` +
                `RAM: ${(mem.rss / 1024 / 1024).toFixed(1)}MB | ` +
                `Боты: ${connectedBots}/${bots.length} | ` +
                `Создание: ${isCreatingBots ? 'ДА' : 'нет'} [${botCreationQueue.length}]`);
